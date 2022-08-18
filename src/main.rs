@@ -31,6 +31,8 @@ error_chain! {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let chunk_size: i64 = 256 * 1024;
+
     // Parse args
     let matches = App::new("Arweave Downloader")
             .version("0.0.1")
@@ -52,7 +54,6 @@ async fn main() -> Result<()> {
                 .help("name of the output file"))
             .get_matches();
     let transaction_id = matches.value_of("TRANSACTION").unwrap();
-
     let output_filename = matches.value_of("OUTPUT").unwrap();
 
 
@@ -60,23 +61,30 @@ async fn main() -> Result<()> {
     let offset_res = reqwest::get(format!("https://arweave.net/tx/{transaction_id}/offset")).await?;
     let offset_body = offset_res.json::<OffsetResponse>().await?;
 
-    let _offset: i32 = offset_body.offset.parse().unwrap();
-    let _size: i32 = offset_body.size.parse().unwrap();
+    let _offset: i64 = offset_body.offset.parse().unwrap();
+    let _size: i64 = offset_body.size.parse().unwrap();
 
     // Download individual chunks
-    let mut contents = String::new();
+    let mut contents: Vec<u8> = vec![];
     let output_file = File::create(output_filename);
 
-    for n in 0.._size {
-        let _current_offset = _offset - n;
+    let mut _current_offset = _offset;
+    let mut _remaining_size = _size;
+
+    println!("Rem: {_remaining_size}");
+    println!("Chunk: {chunk_size}");
+    while _remaining_size > 0 {
+        println!("{_current_offset}");
         let chunk_url = format!("https://arweave.net/chunk/{_current_offset}");
         let chunk_res = reqwest::get(chunk_url).await?;
         let chunk_body = chunk_res.json::<ChunkResponse>().await?;
         let chunk_bytes = decode_config(chunk_body.chunk, URL_SAFE).unwrap();
-        let chunk_string: String = String::from_utf8(chunk_bytes.clone()).unwrap();
-        contents.push_str(&chunk_string);
+        contents.extend(chunk_bytes);
+        _remaining_size -= chunk_size;
+        _current_offset -= chunk_size;
+        println!("{_remaining_size}");
     }
-    output_file.unwrap().write_all(contents.as_bytes()).expect("Unable to write to file");
+    output_file.unwrap().write_all(&contents).expect("Unable to write to file");
 
     println!("Done downloading the file to {output_filename}");
 
