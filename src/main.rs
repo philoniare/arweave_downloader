@@ -25,6 +25,19 @@ error_chain! {
     }
 }
 
+async fn get_offset(transaction_id: String) -> (i64, i64) {
+    let offset_res = reqwest::get(format!("https://arweave.net/tx/{transaction_id}/offset")).await.unwrap();
+    let offset_body = offset_res.json::<OffsetResponse>().await.unwrap();
+
+    return (offset_body.offset.parse().unwrap(), offset_body.size.parse().unwrap());
+}
+
+async fn get_chunk(offset: i64) -> Vec<u8> {
+    let chunk_url = format!("https://arweave.net/chunk/{offset}");
+    let chunk_res = reqwest::get(chunk_url).await.unwrap();
+    let chunk_body = chunk_res.json::<ChunkResponse>().await.unwrap();
+    return decode_config(chunk_body.chunk, URL_SAFE).unwrap();
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -51,15 +64,10 @@ async fn main() -> Result<()> {
     let transaction_id = matches.value_of("TRANSACTION").unwrap();
     let output_filename = matches.value_of("OUTPUT").unwrap();
 
-
     // Fetch transaction offset and size
-    let offset_res = reqwest::get(format!("https://arweave.net/tx/{transaction_id}/offset")).await?;
-    let offset_body = offset_res.json::<OffsetResponse>().await?;
+    let (_offset, _size) = get_offset(transaction_id.to_string()).await;
 
-    let _offset: i64 = offset_body.offset.parse().unwrap();
-    let _size: i64 = offset_body.size.parse().unwrap();
-
-    // Download individual chunks
+    // Download individual chunks and append
     let mut contents: Vec<u8> = vec![];
     let output_file = File::create(output_filename);
 
@@ -67,17 +75,15 @@ async fn main() -> Result<()> {
     let mut _remaining_size = _size;
 
     while _remaining_size > 0 {
-        let chunk_url = format!("https://arweave.net/chunk/{_current_offset}");
-        let chunk_res = reqwest::get(chunk_url).await?;
-        let chunk_body = chunk_res.json::<ChunkResponse>().await?;
-        let mut chunk_bytes = decode_config(chunk_body.chunk, URL_SAFE).unwrap();
+        let mut chunk_bytes = get_chunk(_current_offset).await;
         chunk_bytes.append(&mut contents);
         contents = chunk_bytes;
         _remaining_size -= chunk_size;
         _current_offset -= chunk_size;
     }
-    output_file.unwrap().write_all(&contents).expect("Unable to write to file");
 
+    // Write the final output to the specified file
+    output_file.unwrap().write_all(&contents).expect("Unable to write to file");
     println!("Done downloading the file to {output_filename}");
 
     Ok(())
