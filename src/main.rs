@@ -1,13 +1,10 @@
+extern crate clap;
 use error_chain::error_chain;
 use std::{fs::{File}};
 use serde::{Deserialize};
 use base64::{decode_config, URL_SAFE};
-use std::io::Write; // bring trait into scope
+use std::io::Write;
 use std::str;
-
-
-extern crate clap;
-
 use clap::{Arg, App};
 
 #[derive(Deserialize)]
@@ -42,14 +39,12 @@ async fn main() -> Result<()> {
                 .short("t")
                 .long("transaction")
                 .required(true)
-                .index(1)
                 .takes_value(true)
                 .help("Transaction ID"))
             .arg(Arg::with_name("OUTPUT")
                 .short("o")
                 .long("output")
                 .required(true)
-                .index(2)
                 .takes_value(true)
                 .help("name of the output file"))
             .get_matches();
@@ -71,10 +66,7 @@ async fn main() -> Result<()> {
     let mut _current_offset = _offset;
     let mut _remaining_size = _size;
 
-    println!("Rem: {_remaining_size}");
-    println!("Chunk: {chunk_size}");
     while _remaining_size > 0 {
-        println!("{_current_offset}");
         let chunk_url = format!("https://arweave.net/chunk/{_current_offset}");
         let chunk_res = reqwest::get(chunk_url).await?;
         let chunk_body = chunk_res.json::<ChunkResponse>().await?;
@@ -83,7 +75,6 @@ async fn main() -> Result<()> {
         contents = chunk_bytes;
         _remaining_size -= chunk_size;
         _current_offset -= chunk_size;
-        println!("{_remaining_size}");
     }
     output_file.unwrap().write_all(&contents).expect("Unable to write to file");
 

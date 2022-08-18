@@ -12,3 +12,8 @@ tokio = { version = "1", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }
 base64 = "0.13.0"
 clap = "2.26.0"
+
+[[bin]]
+edition = "2021"
+name = "downloader"
+path = "src/main.rs"
