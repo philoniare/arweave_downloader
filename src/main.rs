@@ -78,8 +78,9 @@ async fn main() -> Result<()> {
         let chunk_url = format!("https://arweave.net/chunk/{_current_offset}");
         let chunk_res = reqwest::get(chunk_url).await?;
         let chunk_body = chunk_res.json::<ChunkResponse>().await?;
-        let chunk_bytes = decode_config(chunk_body.chunk, URL_SAFE).unwrap();
-        contents.extend(chunk_bytes);
+        let mut chunk_bytes = decode_config(chunk_body.chunk, URL_SAFE).unwrap();
+        chunk_bytes.append(&mut contents);
+        contents = chunk_bytes;
         _remaining_size -= chunk_size;
         _current_offset -= chunk_size;
         println!("{_remaining_size}");
